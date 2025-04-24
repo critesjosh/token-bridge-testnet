@@ -55,17 +55,21 @@ export async function getDeployedSponsoredFPCAddress(pxe: PXE) {
   return fpc;
 }
 
-const { ETHEREUM_HOSTS = "https://ethereum-sepolia-rpc.publicnode.com", PRIVATE_KEY } = process.env;
+const MNEMONIC = "test test test test test test test test test test test junk";
+
+// const { ETHEREUM_HOSTS = "https://ethereum-sepolia-rpc.publicnode.com", PRIVATE_KEY } = process.env;
+const { ETHEREUM_HOSTS = "http://localhost:8545", PRIVATE_KEY } = process.env;
 
 if (!PRIVATE_KEY) {
   throw new Error('PRIVATE_KEY must be set in .env file');
 }
 
+
 const { walletClient, publicClient } = createL1Clients(
   ETHEREUM_HOSTS.split(","),
-  PRIVATE_KEY,
+  MNEMONIC,
   // @ts-ignore
-  sepolia
+  // sepolia
 );
 const ownerEthAddress = walletClient.account.address;
 
