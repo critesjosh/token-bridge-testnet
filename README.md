@@ -1,9 +1,11 @@
 # Token bridge tutorial on testnet
 
+Works on sandbox, fails on testnet
+
 Running PXE:
 
 ```bash
-aztec start --port 8081 --pxe --pxe.nodeUrl=http://34.107.66.170/ --pxe.proverEnabled true --l1-chain-id 11155111
+aztec start --port 8081 --pxe --pxe.nodeUrl=XXX --pxe.proverEnabled true --l1-chain-id 11155111
 ```
 
 Explorer url: https://aztecscan.xyz/tx-effects/0x0097e9e242d043591ce0ab42be7f3e280a28b0569556191e5b4e11def8912ff1
