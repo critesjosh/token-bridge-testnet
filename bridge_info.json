@@ -1,0 +1,6 @@
+{
+  "l1PortalContractAddress": "0xe6e340d132b5f46d1e472debcd681b2abc16e57e",
+  "l1TokenContract": "0x09635f643e140090a9a8dcd712ed6285858cebef",
+  "feeAssetHandler": "0xc5a5c42992decbae36851359345fe25997f5c42d",
+  "outboxAddress": "0xaac3d5c5d75162f1f9c6620fdc11b653d93c565f"
+}

@@ -23,16 +23,17 @@ import { TokenBridgeContract } from "@aztec/noir-contracts.js/TokenBridge";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee/testing";
 
 import { getContract } from "viem";
+import fs from 'fs';
 
 import {
-    type ContractInstanceWithAddress,
-    type PXE,
-    getContractInstanceFromDeployParams,
-  } from '@aztec/aztec.js';
-  import { SponsoredFPCContract } from '@aztec/noir-contracts.js/SponsoredFPC';
+  type ContractInstanceWithAddress,
+  type PXE,
+  getContractInstanceFromDeployParams,
+} from '@aztec/aztec.js';
+import { SponsoredFPCContract } from '@aztec/noir-contracts.js/SponsoredFPC';
 import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import 'dotenv/config';
-import { sepolia } from "viem/chains";
+import { sepolia, foundry } from "viem/chains";
 
 const SPONSORED_FPC_SALT = new Fr(0);
 
@@ -57,8 +58,8 @@ export async function getDeployedSponsoredFPCAddress(pxe: PXE) {
 
 const MNEMONIC = "test test test test test test test test test test test junk";
 
-const { ETHEREUM_HOSTS = "https://ethereum-sepolia-rpc.publicnode.com", PRIVATE_KEY } = process.env;
-// const { ETHEREUM_HOSTS = "http://localhost:8545", PRIVATE_KEY } = process.env;
+// const { ETHEREUM_HOSTS = "https://ethereum-sepolia-rpc.publicnode.com", PRIVATE_KEY } = process.env;
+const { ETHEREUM_HOSTS = "http://localhost:8545", PRIVATE_KEY } = process.env;
 
 if (!PRIVATE_KEY) {
   throw new Error('PRIVATE_KEY must be set in .env file');
@@ -68,8 +69,10 @@ if (!PRIVATE_KEY) {
 const { walletClient, publicClient } = createL1Clients(
   ETHEREUM_HOSTS.split(","),
   MNEMONIC,
+  //PRIVATE_KEY,
   // @ts-ignore
-  sepolia
+  foundry,
+  //sepolia
 );
 const ownerEthAddress = walletClient.account.address;
 
@@ -140,18 +143,18 @@ async function main() {
   const logger = createLogger("aztec:token-bridge-tutorial");
   const pxe = await setupSandbox();
 
-let secretKey = Fr.random();
-let salt = Fr.random();
-let schnorrAccount = await getSchnorrAccount(pxe, secretKey, deriveSigningKey(secretKey), salt);
-let ownerWallet = await schnorrAccount.getWallet();
-const ownerAztecAddress = ownerWallet.getAddress();
-const sponseredFPC = await getSponsoredFPCInstance();
-await pxe.registerContract({instance: sponseredFPC, artifact: SponsoredFPCContract.artifact});
-const paymentMethod = new SponsoredFeePaymentMethod(sponseredFPC.address);
+  let secretKey = Fr.random();
+  let salt = Fr.random();
+  let schnorrAccount = await getSchnorrAccount(pxe, secretKey, deriveSigningKey(secretKey), salt);
+  let ownerWallet = await schnorrAccount.getWallet();
+  const ownerAztecAddress = ownerWallet.getAddress();
+  const sponseredFPC = await getSponsoredFPCInstance();
+  await pxe.registerContract({ instance: sponseredFPC, artifact: SponsoredFPCContract.artifact });
+  const paymentMethod = new SponsoredFeePaymentMethod(sponseredFPC.address);
 
-let tx = await schnorrAccount.deploy({ fee: { paymentMethod } }).wait({timeout: 120000});
+  let tx = await schnorrAccount.deploy({ fee: { paymentMethod } }).wait({ timeout: 120000 });
 
-logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
+  logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
 
   const l1ContractAddresses = (await pxe.getNodeInfo()).l1ContractAddresses;
   logger.info("L1 Contract Addresses:");
@@ -168,7 +171,7 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
     18
   )
     .send({ fee: { paymentMethod } })
-    .deployed({timeout: 120000});
+    .deployed({ timeout: 120000 });
   logger.info(`L2 token contract deployed at ${l2TokenContract.address}`);
 
   const l1TokenContract = await deployTestERC20();
@@ -201,7 +204,7 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
     l1PortalContractAddress
   )
     .send({ fee: { paymentMethod } })
-    .deployed({timeout: 120000});
+    .deployed({ timeout: 120000 });
   logger.info(
     `L2 token bridge contract deployed at ${l2BridgeContract.address}`
   );
@@ -209,7 +212,7 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
   await l2TokenContract.methods
     .set_minter(l2BridgeContract.address, true)
     .send({ fee: { paymentMethod } })
-    .wait({timeout: 120000});
+    .wait({ timeout: 120000 });
 
   // @ts-ignore
   await l1Portal.write.initialize(
@@ -232,22 +235,27 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
     logger
   );
 
+  await fs.promises.writeFile(
+    'bridge_info.json',
+    JSON.stringify({
+      l1PortalContractAddress: l1PortalContractAddress.toString(),
+      l1TokenContract: l1TokenContract.toString(), 
+      feeAssetHandler: feeAssetHandler.toString(),
+      outboxAddress: l1ContractAddresses.outboxAddress.toString()
+    }, null, 2),
+    'utf8'
+  );
+
   const claim = await l1PortalManager.bridgeTokensPublic(
     ownerAztecAddress,
     MINT_AMOUNT,
     true
   );
 
-  // Do 2 unrleated actions because
-  // https://github.com/AztecProtocol/aztec-packages/blob/7e9e2681e314145237f95f79ffdc95ad25a0e319/yarn-project/end-to-end/src/shared/cross_chain_test_harness.ts#L354-L355
-  await l2TokenContract.methods
-    .mint_to_public(ownerAztecAddress, 0n)
-    .send({ fee: { paymentMethod } })
-    .wait({timeout: 120000});
-  await l2TokenContract.methods
-    .mint_to_public(ownerAztecAddress, 0n)
-    .send({ fee: { paymentMethod } })
-    .wait({timeout: 120000});
+
+  // Wait for 2 minutes to allow for message processing
+  await new Promise(resolve => setTimeout(resolve, 120000));
+
 
   await l2BridgeContract.methods
     .claim_public(
@@ -257,7 +265,7 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
       claim.messageLeafIndex
     )
     .send({ fee: { paymentMethod } })
-    .wait({timeout: 120000});
+    .wait({ timeout: 120000 });
   const balance = await l2TokenContract.methods
     .balance_of_public(ownerAztecAddress)
     .simulate();
@@ -279,7 +287,7 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
     true
   );
 
-  await authwit.send({ fee: { paymentMethod } }).wait({timeout: 120000});
+  await authwit.send({ fee: { paymentMethod } }).wait({ timeout: 120000 });
 
   const l2ToL1Message = await l1PortalManager.getL2ToL1MessageLeaf(
     withdrawAmount,
@@ -295,7 +303,7 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
       nonce
     )
     .send({ fee: { paymentMethod } })
-    .wait({timeout: 120000} );
+    .wait({ timeout: 120000 });
 
   const newL2Balance = await l2TokenContract.methods
     .balance_of_public(ownerAztecAddress)
@@ -307,6 +315,23 @@ logger.info(`Schnorr account deployed at: ${ownerWallet.getAddress()}`);
       l2TxReceipt.blockNumber!,
       l2ToL1Message
     );
+
+  
+  const withdrawData = {
+    withdrawAmount: withdrawAmount.toString(),
+    ownerEthAddress: ownerEthAddress,
+    l2ToL1MessageIndex: l2ToL1MessageIndex,
+    siblingPath: siblingPath,
+    blockNumber: l2TxReceipt.blockNumber!.toString()
+  };
+
+  fs.writeFileSync(
+    'withdraw-data.json',
+    JSON.stringify(withdrawData, null, 2),
+    'utf8'
+  );
+  logger.info('Withdraw data saved to withdraw-data.json');
+
   await l1PortalManager.withdrawFunds(
     withdrawAmount,
     EthAddress.fromString(ownerEthAddress),
